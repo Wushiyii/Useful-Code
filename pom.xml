@@ -119,6 +119,7 @@
 
   <modules>
     <module>beans</module>
+    <module>mq-consumer</module>
   </modules>
 
 </project>
