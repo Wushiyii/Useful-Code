@@ -14,7 +14,7 @@ public class MQProperties {
     private MessageModel messageModel;
     private Integer consumeThreadMax;
     private Integer consumeThreadMin;
-    private Integer messageBatchMaxSize;
+    private Integer consumeMessageBatchMaxSize;
 
 
 }

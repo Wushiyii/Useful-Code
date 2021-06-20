@@ -1,6 +1,12 @@
 package com.wushiyii;
+import java.util.HashMap;
 
+import com.alibaba.rocketmq.client.consumer.DefaultMQPushConsumer;
+import com.alibaba.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
+import com.alibaba.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
+import com.alibaba.rocketmq.client.consumer.listener.MessageListenerConcurrently;
 import com.alibaba.rocketmq.common.consumer.ConsumeFromWhere;
+import com.alibaba.rocketmq.common.message.MessageExt;
 import com.alibaba.rocketmq.common.protocol.heartbeat.MessageModel;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +35,7 @@ public class ListenerRegister implements DisposableBean {
     private MessageModel messageModel;
     private Integer consumeThreadMin;
     private Integer consumeThreadMax;
-    private Integer messageBatchMaxSize;
+    private Integer consumeMessageBatchMaxSize;
 
     private static final String DEFAULT_GROUP_NAME = "DEFAULT_GROUP";
     private static final String DEFAULT_INSTANCE_NAME = "DEFAULT_INSTANCE";
@@ -48,7 +54,7 @@ public class ListenerRegister implements DisposableBean {
         this.messageModel = Objects.nonNull(mqProperties.getMessageModel()) ? mqProperties.getMessageModel() : DEFAULT_MESSAGE_MODEL;
         this.consumeThreadMax = Objects.nonNull(mqProperties.getConsumeThreadMax()) ? mqProperties.getConsumeThreadMax() : DEFAULT_CONSUME_THREAD_MAX;
         this.consumeThreadMin = Objects.nonNull(mqProperties.getConsumeThreadMin()) ? mqProperties.getConsumeThreadMin() : DEFAULT_CONSUME_THREAD_MIN;
-        this.messageBatchMaxSize = Objects.nonNull(mqProperties.getMessageBatchMaxSize()) ? mqProperties.getMessageBatchMaxSize() : DEFAULT_BATCH_SIZE;
+        this.consumeMessageBatchMaxSize = Objects.nonNull(mqProperties.getConsumeMessageBatchMaxSize()) ? mqProperties.getConsumeMessageBatchMaxSize() : DEFAULT_BATCH_SIZE;
     }
 
 
@@ -62,9 +68,7 @@ public class ListenerRegister implements DisposableBean {
             MQListener mqListener = AnnotationUtils.findAnnotation(matchedMQListener.getClass(), MQListener.class);
             validateAndAdd(mqListener, matchedMQListener);
         }
-
-
-
+        initConsumer();
     }
 
     private void validateAndAdd(MQListener mqListener, GeneralMQListener<?> matchedMQListener) {
@@ -85,6 +89,47 @@ public class ListenerRegister implements DisposableBean {
         }
 
     }
+
+
+    private void initConsumer() {
+
+        Map<String, String> subscription = new HashMap<>();
+
+        for (Map.Entry<String, ListenerWrapperMap> entry : listenerWrapperMap.entrySet()) {
+            String topic = entry.getKey();
+            ListenerWrapperMap wrapperMap = entry.getValue();
+
+            String tagList = String.join("||", wrapperMap.keySet());
+            subscription.put(topic, tagList);
+        }
+
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer();
+        consumer.setConsumerGroup(this.consumeGroup);
+        consumer.setNamesrvAddr(this.namesrvAddr);
+        consumer.setSubscription(subscription);
+        consumer.setInstanceName(this.instanceName);
+        consumer.setConsumeThreadMax(this.consumeThreadMax);
+        consumer.setConsumeThreadMin(this.consumeThreadMin);
+        consumer.setConsumeMessageBatchMaxSize(this.consumeMessageBatchMaxSize);
+        consumer.setConsumeFromWhere(this.consumeFromWhere);
+        consumer.setMessageModel(this.messageModel);
+        consumer.registerMessageListener(new CommonMessageListenerConcurrently());
+
+    }
+
+    public static class CommonMessageListenerConcurrently implements MessageListenerConcurrently {
+
+        public CommonMessageListenerConcurrently() {
+
+        }
+
+        @Override
+        public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
+            //TODO
+            return null;
+        }
+    }
+
 
     public static class ListenerWrapperMap extends HashMap<String, LinkedHashSet<ListenerWrapper>> {
 
