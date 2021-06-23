@@ -1,4 +1,5 @@
 package com.wushiyii;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 
 import com.alibaba.rocketmq.client.consumer.DefaultMQPushConsumer;
@@ -8,6 +9,7 @@ import com.alibaba.rocketmq.client.consumer.listener.MessageListenerConcurrently
 import com.alibaba.rocketmq.common.consumer.ConsumeFromWhere;
 import com.alibaba.rocketmq.common.message.MessageExt;
 import com.alibaba.rocketmq.common.protocol.heartbeat.MessageModel;
+import com.alibaba.rocketmq.shade.com.alibaba.fastjson.JSON;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -25,7 +27,8 @@ public class ListenerRegister implements DisposableBean {
 
 
     private Map<String, String> topicAndTagMap = new HashMap<>();
-    private Map<String, ListenerWrapperMap> listenerWrapperMap = new HashMap<>();
+    private Map<String /* topic*/, ListenerWrapperMap> listenerWrapperMap = new HashMap<>();
+    private DefaultMQPushConsumer consumer;
 
     /* MQ internal properties */
     private String consumeGroup;
@@ -93,6 +96,8 @@ public class ListenerRegister implements DisposableBean {
 
     private void initConsumer() {
 
+        Validate.notEmpty(listenerWrapperMap, "listener map is empty, please check the usage");
+
         Map<String, String> subscription = new HashMap<>();
 
         for (Map.Entry<String, ListenerWrapperMap> entry : listenerWrapperMap.entrySet()) {
@@ -103,7 +108,7 @@ public class ListenerRegister implements DisposableBean {
             subscription.put(topic, tagList);
         }
 
-        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer();
+        consumer = new DefaultMQPushConsumer();
         consumer.setConsumerGroup(this.consumeGroup);
         consumer.setNamesrvAddr(this.namesrvAddr);
         consumer.setSubscription(subscription);
@@ -117,7 +122,7 @@ public class ListenerRegister implements DisposableBean {
 
     }
 
-    public static class CommonMessageListenerConcurrently implements MessageListenerConcurrently {
+    class CommonMessageListenerConcurrently implements MessageListenerConcurrently {
 
         public CommonMessageListenerConcurrently() {
 
@@ -125,13 +130,41 @@ public class ListenerRegister implements DisposableBean {
 
         @Override
         public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
-            //TODO
-            return null;
+
+            for (MessageExt msg : msgs) {
+
+                String topic = msg.getTopic();
+                String tags = msg.getTags();
+                String payloadStr = new String(msg.getBody(), StandardCharsets.UTF_8);
+                log.info("ReceiveMqMsg topic={} tags={} msgId={} queueId={} queueOffset={}", topic, tags,
+                        msg.getMsgId(), msg.getQueueId(), msg.getQueueOffset());
+
+                LinkedHashSet<ListenerWrapper> wrappers = listenerWrapperMap.get(topic).get(tags);
+                try {
+                    for (ListenerWrapper wrapper : wrappers) {
+
+                        Object payload = JSON.parseObject(payloadStr, wrapper.getBodyClazz());
+                        GeneralMQListener<Object> generalMQListener = (GeneralMQListener<Object>) wrapper.getGeneralMQListener();
+                        boolean result = generalMQListener.consume(msg, payload);
+
+                        log.info("ConsumeMqMsg topic={} tags={} msgId={} queueId={} queueOffset={} result={}", topic, tags,
+                                msg.getMsgId(), msg.getQueueId(), msg.getQueueOffset(), result);
+
+                        return result? ConsumeConcurrentlyStatus.CONSUME_SUCCESS : ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                    }
+                } catch (Throwable throwable) {
+                    log.error("ConsumeMqMsg error topic={} tags={} msgId={} queueId={} queueOffset={} result={}", topic, tags,
+                            msg.getMsgId(), msg.getQueueId(), msg.getQueueOffset(), throwable);
+                    throw throwable;
+                }
+
+            }
+            return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
         }
     }
 
 
-    public static class ListenerWrapperMap extends HashMap<String, LinkedHashSet<ListenerWrapper>> {
+    public static class ListenerWrapperMap extends HashMap<String/* tag */, LinkedHashSet<ListenerWrapper>> {
 
     }
 
