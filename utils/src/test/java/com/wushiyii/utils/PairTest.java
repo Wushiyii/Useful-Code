@@ -1,4 +1,4 @@
-package com.wushiyii.beans;
+package com.wushiyii.utils;
 
 import com.wushiyii.BaseTest;
 import org.junit.Test;

@@ -1,4 +1,4 @@
-package com.wushiyii.beans;
+package com.wushiyii.utils;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

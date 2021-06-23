@@ -181,7 +181,7 @@
   </build>
 
   <modules>
-    <module>beans</module>
+    <module>utils</module>
     <module>mq-listener</module>
   </modules>
 

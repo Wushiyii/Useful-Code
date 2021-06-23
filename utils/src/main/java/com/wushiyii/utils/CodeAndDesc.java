@@ -1,4 +1,4 @@
-package com.wushiyii.beans;
+package com.wushiyii.utils;
 
 public class CodeAndDesc<T> {
 

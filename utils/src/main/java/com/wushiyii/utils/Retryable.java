@@ -1,4 +1,4 @@
-package com.wushiyii.beans;
+package com.wushiyii.utils;
 
 import lombok.extern.slf4j.Slf4j;
 
